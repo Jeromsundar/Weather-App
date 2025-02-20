@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,29 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+	late Timer _timer;
+  String _currentTime = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTime();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _updateTime();
+    });
+  }
+
+  void _updateTime() {
+    setState(() {
+      _currentTime = DateFormat('EEEE dd •').add_jm().format(DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
 
 	Widget getWeatherIcon(int code) {
 		switch (code) {
@@ -156,16 +180,16 @@ class _HomeScreenState extends State<HomeScreen> {
 														),
 													),
 													const SizedBox(height: 5),
-													Center(
+													 Center(
 														child: Text(
-															DateFormat('EEEE dd •').add_jm().format(state.weather.date!),
+															_currentTime,
 															style: const TextStyle(
 																color: Colors.white,
 																fontSize: 16,
-																fontWeight: FontWeight.w300
-															),
+																fontWeight: FontWeight.w300,
 														),
-													),
+														)
+														),
 													const SizedBox(height: 30),
 													Row(
 														mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -1,58 +1,94 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:weatherapp/bloc/weather_bloc_bloc.dart';
 import 'package:weatherapp/screens/home_screen.dart';
-// Import API_KEY
 
 void main() {
   runApp(const MainApp());
 }
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({super.key});
+
+  @override
+  State<MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
+  late Future<Position> _positionFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLocation();
+  }
+
+  void _fetchLocation() {
+    setState(() {
+      _positionFuture = _determinePosition();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-			debugShowCheckedModeBanner: false,
-      home: FutureBuilder(
-				future: _determinePosition(),
+      debugShowCheckedModeBanner: false,
+      home: FutureBuilder<Position>(
+        future: _positionFuture,
         builder: (context, snap) {
-					if(snap.hasData) {
-						return BlocProvider<WeatherBlocBloc>(
-							create: (context) => WeatherBlocBloc()..add(
-								FetchWeather(snap.data as Position)
-							),
-							child: const HomeScreen(),
-						);
-					} else {
-						return const Scaffold(
-							body: Center(
-								child: CircularProgressIndicator(),
-							),
-						);
-					}
-        }
-      )
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snap.hasError) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              showDialog<String>(
+                context: context,
+                builder: (BuildContext context) => AlertDialog(
+                  title: const Text('Location Error'),
+                  content: Text(snap.error.toString()),
+                  actions: <Widget>[
+                    TextButton(
+                      onPressed: () {
+                        //Navigator.pop(context, 'Cancel');
+                        SystemNavigator.pop(); // Retry fetching location
+                      },
+                      child: const Text('Cancel'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(context, 'OK');
+                        _fetchLocation(); // Retry fetching location
+                      },
+                      child: const Text('OK'),
+                    ),
+                  ],
+                ),
+              );
+            });
+            return const Center();
+          } else if (snap.hasData) {
+            return BlocProvider<WeatherBlocBloc>(
+              create: (context) => WeatherBlocBloc()
+                ..add(FetchWeather(snap.data as Position)),
+              child: const HomeScreen(),
+            );
+          } else {
+            return const Center(child: Text('Location not available.'));
+          }
+        },
+      ),
     );
   }
 }
 
 /// Determine the current position of the device.
-///
-/// When the location services are not enabled or permissions
-/// are denied the `Future` will return an error.
 Future<Position> _determinePosition() async {
   bool serviceEnabled;
   LocationPermission permission;
 
-  // Test if location services are enabled.
   serviceEnabled = await Geolocator.isLocationServiceEnabled();
   if (!serviceEnabled) {
-    // Location services are not enabled don't continue
-    // accessing the position and request users of the 
-    // App to enable the location services.
     return Future.error('Location services are disabled.');
   }
 
@@ -60,22 +96,15 @@ Future<Position> _determinePosition() async {
   if (permission == LocationPermission.denied) {
     permission = await Geolocator.requestPermission();
     if (permission == LocationPermission.denied) {
-      // Permissions are denied, next time you could try
-      // requesting permissions again (this is also where
-      // Android's shouldShowRequestPermissionRationale 
-      // returned true. According to Android guidelines
-      // your App should show an explanatory UI now.
       return Future.error('Location permissions are denied');
     }
   }
-  
-  if (permission == LocationPermission.deniedForever) {
-    // Permissions are denied forever, handle appropriately. 
-    return Future.error(
-      'Location permissions are permanently denied, we cannot request permissions.');
-  } 
 
-  // When we reach here, permissions are granted and we can
-  // continue accessing the position of the device.
+  if (permission == LocationPermission.deniedForever) {
+    return Future.error(
+      'Location permissions are permanently denied, we cannot request permissions.',
+    );
+  }
+
   return await Geolocator.getCurrentPosition();
 }
